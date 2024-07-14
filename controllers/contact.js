@@ -14,7 +14,7 @@ exports.submitContact = async (req, res) => {
       }).save()
     );
   } catch (err) {
-    // console.log(err);
+    console.log(err);
     res.status(400).send("Conatct Submittion failed");
   }
 };
