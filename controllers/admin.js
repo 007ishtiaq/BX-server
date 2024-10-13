@@ -1,9 +1,17 @@
+const User = require("../models/user");
 const Product = require("../models/product");
+const Review = require("../models/review");
 const Order = require("../models/order");
 const Productcancel = require("../models/productcancel");
 const Productreturn = require("../models/productreturn");
 const Ledger = require("../models/ledger");
 const Shipping = require("../models/shipping");
+const {
+  transporter,
+  orderReceipttemplate,
+  generateInvoicePDF,
+} = require("../middlewares/utils");
+const fs = require("fs");
 
 const {
   Types: { ObjectId },
@@ -25,7 +33,6 @@ exports.orders = async (req, res) => {
     ],
   })
     .sort("createdAt")
-    .populate("products.product")
     .populate("orderdBy")
     .exec();
 
@@ -38,7 +45,6 @@ exports.rejectedOrders = async (req, res) => {
     orderStatus: "Cancelled",
   })
     .sort("-createdAt")
-    .populate("products.product")
     .populate("orderdBy")
     .exec();
 
@@ -53,7 +59,6 @@ exports.completedOrders = async (req, res) => {
     ],
   })
     .sort("-createdAt")
-    .populate("products.product")
     .populate("orderdBy")
     .exec();
 
@@ -64,7 +69,6 @@ exports.returnedOrders = async (req, res) => {
     orderStatus: "Returned",
   })
     .sort("-createdAt")
-    .populate("products.product")
     .populate("orderdBy")
     .exec();
 
@@ -104,11 +108,22 @@ exports.orderStatus = async (req, res) => {
                 productsTotal +
                 foundOrder.products[i].price * foundOrder.products[i].count;
             }
-
+            foundOrder;
             let discounted = "";
-            if (foundOrder.paymentIntent.dispercent) {
-              discounted =
-                (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+            if (foundOrder.paymentIntent.discountType) {
+              // in case of discount in persentage
+              if (foundOrder.paymentIntent.discountType === "Discount") {
+                discounted =
+                  (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+              }
+              // in case of discount in cash
+              if (foundOrder.paymentIntent.discountType === "Cash") {
+                discounted = foundOrder.paymentIntent.dispercent;
+              }
+              // in case of discount in shipping fee
+              if (foundOrder.paymentIntent.discountType === "Shipping") {
+                discounted = foundOrder.shippingfee;
+              }
             }
 
             let updatedOrder = await Order.findByIdAndUpdate(
@@ -144,26 +159,14 @@ exports.orderStatus = async (req, res) => {
             }
 
             //shipping re-calculation
-            let totalWeightorignal = 0;
-            for (let i = 0; i < orignalOrder.products.length; i++) {
-              let productFromDb = await Product.findById(
-                orignalOrder.products[i].product
-              )
-                .select("weight")
-                .exec();
-              totalWeightorignal =
-                totalWeightorignal +
-                productFromDb.weight * orignalOrder.products[i].count;
-            }
-
             let shippingfeeorignal = 0;
-            let shippings = await Shipping.find({}).exec();
-            for (let i = 0; i < shippings.length; i++) {
-              if (
-                totalWeightorignal <= shippings[i].weightend &&
-                totalWeightorignal >= shippings[i].weightstart
-              ) {
-                shippingfeeorignal = shippings[i].charges;
+            for (let i = 0; i < orignalOrder.products.length; i++) {
+              const product = orignalOrder.products[i].product;
+              if (product.disprice === 0) {
+                shippingfeeorignal +=
+                  product.shippingcharges * orignalOrder.products[i].count;
+              } else {
+                shippingfeeorignal += product.shippingcharges;
               }
             }
             orignalOrder.shippingfee = shippingfeeorignal;
@@ -178,13 +181,25 @@ exports.orderStatus = async (req, res) => {
             }
 
             let discounted = "";
-            if (orignalOrder.paymentIntent.dispercent) {
-              discounted =
-                (productsTotal * orignalOrder.paymentIntent.dispercent) / 100;
+            if (orignalOrder.paymentIntent.discountType) {
+              // in case of discount in persentage
+              if (orignalOrder.paymentIntent.discountType === "Discount") {
+                discounted =
+                  (productsTotal * orignalOrder.paymentIntent.dispercent) / 100;
+              }
+              // in case of discount in cash
+              if (orignalOrder.paymentIntent.discountType === "Cash") {
+                discounted = orignalOrder.paymentIntent.dispercent;
+              }
+              // in case of discount in shipping fee
+              if (orignalOrder.paymentIntent.discountType === "Shipping") {
+                discounted = orignalOrder.shippingfee;
+              }
             }
 
             // Update amount and discount in originalOrder
             let dispercent = orignalOrder.paymentIntent.dispercent;
+            let discountType = orignalOrder.paymentIntent.discountType;
             let currency = orignalOrder.paymentIntent.currency;
             let created = orignalOrder.paymentIntent.created;
             orignalOrder.paymentIntent = {};
@@ -192,6 +207,7 @@ exports.orderStatus = async (req, res) => {
               productsTotal - discounted + orignalOrder.shippingfee;
             orignalOrder.paymentIntent.discounted = discounted;
             orignalOrder.paymentIntent.dispercent = dispercent;
+            orignalOrder.paymentIntent.discountType = discountType;
             orignalOrder.paymentIntent.currency = currency;
             orignalOrder.paymentIntent.created = created;
 
@@ -240,9 +256,20 @@ exports.orderStatus = async (req, res) => {
             }
 
             let discounted = "";
-            if (foundOrder.paymentIntent.dispercent) {
-              discounted =
-                (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+            if (foundOrder.paymentIntent.discountType) {
+              // in case of discount in persentage
+              if (foundOrder.paymentIntent.discountType === "Discount") {
+                discounted =
+                  (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+              }
+              // in case of discount in cash
+              if (foundOrder.paymentIntent.discountType === "Cash") {
+                discounted = foundOrder.paymentIntent.dispercent;
+              }
+              // in case of discount in shipping fee
+              if (foundOrder.paymentIntent.discountType === "Shipping") {
+                discounted = foundOrder.shippingfee;
+              }
             }
 
             let updatedOrder = await Order.findByIdAndUpdate(
@@ -279,26 +306,14 @@ exports.orderStatus = async (req, res) => {
             }
 
             //shipping re-calculation
-            let totalWeightorignal = 0;
-            for (let i = 0; i < orignalOrder.products.length; i++) {
-              let productFromDb = await Product.findById(
-                orignalOrder.products[i].product
-              )
-                .select("weight")
-                .exec();
-              totalWeightorignal =
-                totalWeightorignal +
-                productFromDb.weight * orignalOrder.products[i].count;
-            }
-
             let shippingfeeorignal = 0;
-            let shippings = await Shipping.find({}).exec();
-            for (let i = 0; i < shippings.length; i++) {
-              if (
-                totalWeightorignal <= shippings[i].weightend &&
-                totalWeightorignal >= shippings[i].weightstart
-              ) {
-                shippingfeeorignal = shippings[i].charges;
+            for (let i = 0; i < orignalOrder.products.length; i++) {
+              const product = orignalOrder.products[i].product;
+              if (product.disprice === 0) {
+                shippingfeeorignal +=
+                  product.shippingcharges * orignalOrder.products[i].count;
+              } else {
+                shippingfeeorignal += product.shippingcharges;
               }
             }
             orignalOrder.shippingfee = shippingfeeorignal;
@@ -312,13 +327,25 @@ exports.orderStatus = async (req, res) => {
             }
 
             let discounted = "";
-            if (orignalOrder.paymentIntent.dispercent) {
-              discounted =
-                (productsTotal * orignalOrder.paymentIntent.dispercent) / 100;
+            if (orignalOrder.paymentIntent.discountType) {
+              // in case of discount in persentage
+              if (orignalOrder.paymentIntent.discountType === "Discount") {
+                discounted =
+                  (productsTotal * orignalOrder.paymentIntent.dispercent) / 100;
+              }
+              // in case of discount in cash
+              if (orignalOrder.paymentIntent.discountType === "Cash") {
+                discounted = orignalOrder.paymentIntent.dispercent;
+              }
+              // in case of discount in shipping fee
+              if (orignalOrder.paymentIntent.discountType === "Shipping") {
+                discounted = orignalOrder.shippingfee;
+              }
             }
 
             // Update amount and discount in originalOrder
             let dispercent = orignalOrder.paymentIntent.dispercent;
+            let discountType = orignalOrder.paymentIntent.discountType;
             let currency = orignalOrder.paymentIntent.currency;
             let created = orignalOrder.paymentIntent.created;
             orignalOrder.paymentIntent = {};
@@ -326,6 +353,7 @@ exports.orderStatus = async (req, res) => {
               productsTotal - discounted + orignalOrder.shippingfee;
             orignalOrder.paymentIntent.discounted = discounted;
             orignalOrder.paymentIntent.dispercent = dispercent;
+            orignalOrder.paymentIntent.discountType = discountType;
             orignalOrder.paymentIntent.currency = currency;
             orignalOrder.paymentIntent.created = created;
 
@@ -407,9 +435,20 @@ exports.orderStatus = async (req, res) => {
           }
 
           let discounted = "";
-          if (foundOrder.paymentIntent.dispercent) {
-            discounted =
-              (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+          if (foundOrder.paymentIntent.discountType) {
+            // in case of discount in persentage
+            if (foundOrder.paymentIntent.discountType === "Discount") {
+              discounted =
+                (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+            }
+            // in case of discount in cash
+            if (foundOrder.paymentIntent.discountType === "Cash") {
+              discounted = foundOrder.paymentIntent.dispercent;
+            }
+            // in case of discount in shipping fee
+            if (foundOrder.paymentIntent.discountType === "Shipping") {
+              discounted = foundOrder.shippingfee;
+            }
           }
 
           let updatedOrder = await Order.findByIdAndUpdate(
@@ -450,29 +489,17 @@ exports.orderStatus = async (req, res) => {
           }
 
           //shipping re-calculation
-          let totalWeight = 0;
+          let shippingfeeclone = 0;
           for (let i = 0; i < clonedOrder.products.length; i++) {
-            let productFromDb = await Product.findById(
-              clonedOrder.products[i].product
-            )
-              .select("weight")
-              .exec();
-            totalWeight =
-              totalWeight +
-              productFromDb.weight * clonedOrder.products[i].count;
-          }
-
-          let shippingfee = 0;
-          let shippings = await Shipping.find({}).exec();
-          for (let i = 0; i < shippings.length; i++) {
-            if (
-              totalWeight <= shippings[i].weightend &&
-              totalWeight >= shippings[i].weightstart
-            ) {
-              shippingfee = shippings[i].charges;
+            const product = clonedOrder.products[i].product;
+            if (product.disprice === 0) {
+              shippingfeeclone +=
+                product.shippingcharges * clonedOrder.products[i].count;
+            } else {
+              shippingfeeclone += product.shippingcharges;
             }
           }
-          clonedOrder.shippingfee = shippingfee;
+          clonedOrder.shippingfee = shippingfeeclone;
 
           // changing the discount and total amount after removing item from orignal order
 
@@ -484,13 +511,25 @@ exports.orderStatus = async (req, res) => {
           }
 
           let discounted = "";
-          if (clonedOrder.paymentIntent.dispercent) {
-            discounted =
-              (productsTotal * clonedOrder.paymentIntent.dispercent) / 100;
+          if (clonedOrder.paymentIntent.discountType) {
+            // in case of discount in persentage
+            if (clonedOrder.paymentIntent.discountType === "Discount") {
+              discounted =
+                (productsTotal * clonedOrder.paymentIntent.dispercent) / 100;
+            }
+            // in case of discount in cash
+            if (clonedOrder.paymentIntent.discountType === "Cash") {
+              discounted = clonedOrder.paymentIntent.dispercent;
+            }
+            // in case of discount in shipping fee
+            if (clonedOrder.paymentIntent.discountType === "Shipping") {
+              discounted = clonedOrder.shippingfee;
+            }
           }
 
           // Update amount and discount in originalOrder
           let dispercent = clonedOrder.paymentIntent.dispercent;
+          let discountType = clonedOrder.paymentIntent.discountType;
           let currency = clonedOrder.paymentIntent.currency;
           let created = clonedOrder.paymentIntent.created;
           clonedOrder.paymentIntent = {};
@@ -498,6 +537,7 @@ exports.orderStatus = async (req, res) => {
             productsTotal - discounted + clonedOrder.shippingfee;
           clonedOrder.paymentIntent.discounted = discounted;
           clonedOrder.paymentIntent.dispercent = dispercent;
+          clonedOrder.paymentIntent.discountType = discountType;
           clonedOrder.paymentIntent.currency = currency;
           clonedOrder.paymentIntent.created = created;
 
@@ -574,9 +614,20 @@ exports.orderStatus = async (req, res) => {
           }
 
           let discounted = "";
-          if (foundOrder.paymentIntent.dispercent) {
-            discounted =
-              (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+          if (foundOrder.paymentIntent.discountType) {
+            // in case of discount in persentage
+            if (foundOrder.paymentIntent.discountType === "Discount") {
+              discounted =
+                (productsTotal * foundOrder.paymentIntent.dispercent) / 100;
+            }
+            // in case of discount in cash
+            if (foundOrder.paymentIntent.discountType === "Cash") {
+              discounted = foundOrder.paymentIntent.dispercent;
+            }
+            // in case of discount in shipping fee
+            if (foundOrder.paymentIntent.discountType === "Shipping") {
+              discounted = foundOrder.shippingfee;
+            }
           }
 
           let updatedOrder = await Order.findByIdAndUpdate(
@@ -617,29 +668,17 @@ exports.orderStatus = async (req, res) => {
           }
 
           //shipping re-calculation
-          let totalWeight = 0;
+          let shippingfeeclone = 0;
           for (let i = 0; i < clonedOrder.products.length; i++) {
-            let productFromDb = await Product.findById(
-              clonedOrder.products[i].product
-            )
-              .select("weight")
-              .exec();
-            totalWeight =
-              totalWeight +
-              productFromDb.weight * clonedOrder.products[i].count;
-          }
-
-          let shippingfee = 0;
-          let shippings = await Shipping.find({}).exec();
-          for (let i = 0; i < shippings.length; i++) {
-            if (
-              totalWeight <= shippings[i].weightend &&
-              totalWeight >= shippings[i].weightstart
-            ) {
-              shippingfee = shippings[i].charges;
+            const product = clonedOrder.products[i].product;
+            if (product.disprice === 0) {
+              shippingfeeclone +=
+                product.shippingcharges * clonedOrder.products[i].count;
+            } else {
+              shippingfeeclone += product.shippingcharges;
             }
           }
-          clonedOrder.shippingfee = shippingfee;
+          clonedOrder.shippingfee = shippingfeeclone;
 
           // changing the discount and total amount after removing item from orignal order
           let productsTotal = 0;
@@ -650,13 +689,25 @@ exports.orderStatus = async (req, res) => {
           }
 
           let discounted = "";
-          if (clonedOrder.paymentIntent.dispercent) {
-            discounted =
-              (productsTotal * clonedOrder.paymentIntent.dispercent) / 100;
+          if (clonedOrder.paymentIntent.discountType) {
+            // in case of discount in persentage
+            if (clonedOrder.paymentIntent.discountType === "Discount") {
+              discounted =
+                (productsTotal * clonedOrder.paymentIntent.dispercent) / 100;
+            }
+            // in case of discount in cash
+            if (clonedOrder.paymentIntent.discountType === "Cash") {
+              discounted = clonedOrder.paymentIntent.dispercent;
+            }
+            // in case of discount in shipping fee
+            if (clonedOrder.paymentIntent.discountType === "Shipping") {
+              discounted = clonedOrder.shippingfee;
+            }
           }
 
           // Update amount and discount in originalOrder
           let dispercent = clonedOrder.paymentIntent.dispercent;
+          let discountType = clonedOrder.paymentIntent.discountType;
           let currency = clonedOrder.paymentIntent.currency;
           let created = clonedOrder.paymentIntent.created;
           clonedOrder.paymentIntent = {};
@@ -664,6 +715,7 @@ exports.orderStatus = async (req, res) => {
             productsTotal - discounted + clonedOrder.shippingfee;
           clonedOrder.paymentIntent.discounted = discounted;
           clonedOrder.paymentIntent.dispercent = dispercent;
+          clonedOrder.paymentIntent.discountType = discountType;
           clonedOrder.paymentIntent.currency = currency;
           clonedOrder.paymentIntent.created = created;
 
@@ -737,6 +789,19 @@ exports.orderUpdate = async (req, res) => {
     //destructuring from body
     const newCount = form.Quantity;
     const newPrice = form.Price;
+    const newShipping = form.Shipping;
+
+    let targetedOrder = await Order.findOne({
+      _id: new ObjectId(orderId),
+      "products._id": new ObjectId(prodId),
+    });
+
+    // restriction on 0 price items (free item) if coupon is already applied
+    if (newPrice == 0 && targetedOrder.paymentIntent.discounted > 1) {
+      return res.json({
+        error: `Free Item on this order not Allow, Coupon applied on the order.`,
+      });
+    }
 
     // Find the document and the product you want to update
     const order = await Order.findOne({
@@ -746,7 +811,7 @@ exports.orderUpdate = async (req, res) => {
 
     // inside order product price and count updation;
     if (order) {
-      const itemupdatedOrder = await Order.findOneAndUpdate(
+      let itemupdatedOrder = await Order.findOneAndUpdate(
         {
           _id: new ObjectId(orderId),
           "products._id": new ObjectId(prodId),
@@ -755,32 +820,21 @@ exports.orderUpdate = async (req, res) => {
           $set: {
             "products.$.count": newCount,
             "products.$.price": newPrice,
+            "products.$.product.shippingcharges": newShipping,
           },
         },
         { new: true }
       );
 
       //shipping re-calculation
-      let totalWeight = 0;
-      for (let i = 0; i < itemupdatedOrder.products.length; i++) {
-        let productFromDb = await Product.findById(
-          itemupdatedOrder.products[i].product
-        )
-          .select("weight")
-          .exec();
-        totalWeight =
-          totalWeight +
-          productFromDb.weight * itemupdatedOrder.products[i].count;
-      }
-
       let shippingfee = 0;
-      let shippings = await Shipping.find({}).exec();
-      for (let i = 0; i < shippings.length; i++) {
-        if (
-          totalWeight <= shippings[i].weightend &&
-          totalWeight >= shippings[i].weightstart
-        ) {
-          shippingfee = shippings[i].charges;
+      for (let i = 0; i < itemupdatedOrder.products.length; i++) {
+        const product = itemupdatedOrder.products[i].product;
+        if (product.disprice === 0) {
+          shippingfee +=
+            product.shippingcharges * itemupdatedOrder.products[i].count;
+        } else {
+          shippingfee += product.shippingcharges;
         }
       }
 
@@ -791,13 +845,13 @@ exports.orderUpdate = async (req, res) => {
         },
         {
           $set: {
-            shippingfee: form.Shipping > 0 ? form.Shipping : shippingfee,
+            shippingfee: shippingfee,
           },
         },
         { new: true }
       );
 
-      // changing the discount and total amound after edit item qty or price
+      // changing the discount and total amound after edit item qty | price or shipping
       let productsTotal = 0;
       for (let i = 0; i < shippingupdatedOrder.products.length; i++) {
         productsTotal =
@@ -807,9 +861,21 @@ exports.orderUpdate = async (req, res) => {
       }
 
       let discounted = "";
-      if (shippingupdatedOrder.paymentIntent.dispercent) {
-        discounted =
-          (productsTotal * shippingupdatedOrder.paymentIntent.dispercent) / 100;
+      if (shippingupdatedOrder.paymentIntent.discountType) {
+        // in case of discount in persentage
+        if (shippingupdatedOrder.paymentIntent.discountType === "Discount") {
+          discounted =
+            (productsTotal * shippingupdatedOrder.paymentIntent.dispercent) /
+            100;
+        }
+        // in case of discount in cash
+        if (shippingupdatedOrder.paymentIntent.discountType === "Cash") {
+          discounted = shippingupdatedOrder.paymentIntent.dispercent;
+        }
+        // in case of discount in shipping fee
+        if (shippingupdatedOrder.paymentIntent.discountType === "Shipping") {
+          discounted = shippingupdatedOrder.shippingfee;
+        }
       }
 
       const updatedOrder = await Order.findOneAndUpdate(
@@ -856,8 +922,10 @@ exports.orderUpdate = async (req, res) => {
 
 exports.removeProductandMakeclone = async (req, res) => {
   const { id, prodId } = req.body;
+
   try {
     const foundOrder = await Order.findById(id);
+
     if (
       foundOrder.orderStatus === "Cancelled" ||
       foundOrder.orderStatus === "Returned"
@@ -875,6 +943,7 @@ exports.removeProductandMakeclone = async (req, res) => {
       if (!originalOrder) {
         throw new Error("Order not found");
       }
+
       // Check if clone order already exists
       let clonedOrder = await Order.findOne({ _id: originalOrder.CloneId });
       if (!clonedOrder) {
@@ -889,43 +958,36 @@ exports.removeProductandMakeclone = async (req, res) => {
           error: "Item Cannot be removed, as Order's Clone is CashBacked",
         });
       }
+
       // Find the index of the product to remove
-      const productIndex = originalOrder.products.findIndex(
-        (product) => product._id.toString() === prodId.toString()
-      );
+      const prodIdi = new ObjectId(prodId);
+      const productIndex = originalOrder.products.findIndex((product) => {
+        return product._id.equals(prodIdi);
+      });
+
       if (productIndex === -1) {
         throw new Error("Product not found in order");
       }
       // Remove the product from the original order
       const removedProduct = originalOrder.products.splice(productIndex, 1)[0];
+
       // Remove _id from removedProduct
       delete removedProduct._id;
       // Add the removed product to the products array of the cloned order
       clonedOrder.products.push(removedProduct);
 
       //shipping re-calculation
-      let totalWeight = 0;
+      let shippingfeeclone = 0;
       for (let i = 0; i < clonedOrder.products.length; i++) {
-        let productFromDb = await Product.findById(
-          clonedOrder.products[i].product
-        )
-          .select("weight")
-          .exec();
-        totalWeight =
-          totalWeight + productFromDb.weight * clonedOrder.products[i].count;
-      }
-
-      let shippingfee = 0;
-      let shippings = await Shipping.find({}).exec();
-      for (let i = 0; i < shippings.length; i++) {
-        if (
-          totalWeight <= shippings[i].weightend &&
-          totalWeight >= shippings[i].weightstart
-        ) {
-          shippingfee = shippings[i].charges;
+        const product = clonedOrder.products[i].product;
+        if (product.disprice === 0) {
+          shippingfeeclone +=
+            product.shippingcharges * clonedOrder.products[i].count;
+        } else {
+          shippingfeeclone += product.shippingcharges;
         }
       }
-      clonedOrder.shippingfee = shippingfee;
+      clonedOrder.shippingfee = shippingfeeclone;
 
       // changing the discount and total amount after removing item from clone order
       let productsTotalvalue = 0;
@@ -936,13 +998,25 @@ exports.removeProductandMakeclone = async (req, res) => {
       }
 
       let discountedamt = "";
-      if (clonedOrder.paymentIntent.dispercent) {
-        discountedamt =
-          (productsTotalvalue * clonedOrder.paymentIntent.dispercent) / 100;
+      if (clonedOrder.paymentIntent.discountType) {
+        // in case of discount in persentage
+        if (clonedOrder.paymentIntent.discountType === "Discount") {
+          discountedamt =
+            (productsTotalvalue * clonedOrder.paymentIntent.dispercent) / 100;
+        }
+        // in case of discount in cash
+        if (clonedOrder.paymentIntent.discountType === "Cash") {
+          discountedamt = clonedOrder.paymentIntent.dispercent;
+        }
+        // in case of discount in shipping fee
+        if (clonedOrder.paymentIntent.discountType === "Shipping") {
+          discountedamt = clonedOrder.shippingfee;
+        }
       }
 
       // Update amount and discount in clonedOrder
       let dispercent = clonedOrder.paymentIntent.dispercent;
+      let discountType = clonedOrder.paymentIntent.discountType;
       let currency = clonedOrder.paymentIntent.currency;
       let created = clonedOrder.paymentIntent.created;
       clonedOrder.paymentIntent = {};
@@ -950,6 +1024,7 @@ exports.removeProductandMakeclone = async (req, res) => {
         productsTotalvalue - discountedamt + clonedOrder.shippingfee;
       clonedOrder.paymentIntent.discounted = discountedamt;
       clonedOrder.paymentIntent.dispercent = dispercent;
+      clonedOrder.paymentIntent.discountType = discountType;
       clonedOrder.paymentIntent.currency = currency;
       clonedOrder.paymentIntent.created = created;
 
@@ -960,25 +1035,14 @@ exports.removeProductandMakeclone = async (req, res) => {
       await clonedOrder.save();
 
       //shipping re-calculation
-      let totalWeightorignal = 0;
+      let shippingfeeorignal = 0;
       for (let i = 0; i < originalOrder.products.length; i++) {
-        let productFromDb = await Product.findById(
-          originalOrder.products[i].product
-        )
-          .select("weight")
-          .exec();
-        totalWeightorignal =
-          totalWeightorignal +
-          productFromDb.weight * originalOrder.products[i].count;
-      }
-
-      let shippingfeeorignal = 0; //here shipping charge fetch line removed, as using above "shippings"
-      for (let i = 0; i < shippings.length; i++) {
-        if (
-          totalWeightorignal <= shippings[i].weightend &&
-          totalWeightorignal >= shippings[i].weightstart
-        ) {
-          shippingfeeorignal = shippings[i].charges;
+        const product = originalOrder.products[i].product;
+        if (product.disprice === 0) {
+          shippingfeeorignal +=
+            product.shippingcharges * originalOrder.products[i].count;
+        } else {
+          shippingfeeorignal += product.shippingcharges;
         }
       }
       originalOrder.shippingfee = shippingfeeorignal;
@@ -992,9 +1056,20 @@ exports.removeProductandMakeclone = async (req, res) => {
       }
 
       let discounted = "";
-      if (originalOrder.paymentIntent.dispercent) {
-        discounted =
-          (productsTotal * originalOrder.paymentIntent.dispercent) / 100;
+      if (originalOrder.paymentIntent.discountType) {
+        // in case of discount in persentage
+        if (originalOrder.paymentIntent.discountType === "Discount") {
+          discounted =
+            (productsTotal * originalOrder.paymentIntent.dispercent) / 100;
+        }
+        // in case of discount in cash
+        if (originalOrder.paymentIntent.discountType === "Cash") {
+          discounted = originalOrder.paymentIntent.dispercent;
+        }
+        // in case of discount in shipping fee
+        if (originalOrder.paymentIntent.discountType === "Shipping") {
+          discounted = originalOrder.shippingfee;
+        }
       }
 
       // Update amount and discount in originalOrder
@@ -1054,43 +1129,35 @@ exports.removeProductandMakeclone = async (req, res) => {
           error: "Item Cannot be removed, as Order's Clone is CashBacked",
         });
       }
+
       // Find the index of the product to remove
-      const productIndex = originalOrder.products.findIndex(
-        (product) => product._id.toString() === prodId.toString()
-      );
+      const prodIdi = new ObjectId(prodId);
+      const productIndex = originalOrder.products.findIndex((product) => {
+        return product._id.equals(prodIdi);
+      });
       if (productIndex === -1) {
         throw new Error("Product not found in order");
       }
       // Remove the product from the original order
       const removedProduct = originalOrder.products.splice(productIndex, 1)[0];
+
       // Remove _id from removedProduct
       delete removedProduct._id;
       // Add the removed product to the products array of the cloned order
       clonedOrder.products.push(removedProduct);
 
       //shipping re-calculation
-      let totalWeight = 0;
+      let shippingfeeclone = 0;
       for (let i = 0; i < clonedOrder.products.length; i++) {
-        let productFromDb = await Product.findById(
-          clonedOrder.products[i].product
-        )
-          .select("weight")
-          .exec();
-        totalWeight =
-          totalWeight + productFromDb.weight * clonedOrder.products[i].count;
-      }
-
-      let shippingfee = 0;
-      let shippings = await Shipping.find({}).exec();
-      for (let i = 0; i < shippings.length; i++) {
-        if (
-          totalWeight <= shippings[i].weightend &&
-          totalWeight >= shippings[i].weightstart
-        ) {
-          shippingfee = shippings[i].charges;
+        const product = clonedOrder.products[i].product;
+        if (product.disprice === 0) {
+          shippingfeeclone +=
+            product.shippingcharges * clonedOrder.products[i].count;
+        } else {
+          shippingfeeclone += product.shippingcharges;
         }
       }
-      clonedOrder.shippingfee = shippingfee;
+      clonedOrder.shippingfee = shippingfeeclone;
 
       // changing the discount and total amount after removing item from clone order
       let productsTotalvalue = 0;
@@ -1101,13 +1168,26 @@ exports.removeProductandMakeclone = async (req, res) => {
       }
 
       let discountedamt = "";
-      if (clonedOrder.paymentIntent.dispercent) {
-        discountedamt =
-          (productsTotalvalue * clonedOrder.paymentIntent.dispercent) / 100;
+      if (clonedOrder.paymentIntent.discountType) {
+        // in case of discount in persentage
+        if (clonedOrder.paymentIntent.discountType === "Discount") {
+          // console.log("clonedOrder type is Discount");
+          discountedamt =
+            (productsTotalvalue * clonedOrder.paymentIntent.dispercent) / 100;
+        }
+        // in case of discount in cash
+        if (clonedOrder.paymentIntent.discountType === "Cash") {
+          discountedamt = clonedOrder.paymentIntent.dispercent;
+        }
+        // in case of discount in shipping fee
+        if (clonedOrder.paymentIntent.discountType === "Shipping") {
+          discountedamt = clonedOrder.shippingfee;
+        }
       }
 
       // Update amount and discount in clonedOrder
       let dispercent = clonedOrder.paymentIntent.dispercent;
+      let discountType = clonedOrder.paymentIntent.discountType;
       let currency = clonedOrder.paymentIntent.currency;
       let created = clonedOrder.paymentIntent.created;
       clonedOrder.paymentIntent = {};
@@ -1115,6 +1195,7 @@ exports.removeProductandMakeclone = async (req, res) => {
         productsTotalvalue - discountedamt + clonedOrder.shippingfee;
       clonedOrder.paymentIntent.discounted = discountedamt;
       clonedOrder.paymentIntent.dispercent = dispercent;
+      clonedOrder.paymentIntent.discountType = discountType;
       clonedOrder.paymentIntent.currency = currency;
       clonedOrder.paymentIntent.created = created;
 
@@ -1125,25 +1206,14 @@ exports.removeProductandMakeclone = async (req, res) => {
       await clonedOrder.save();
 
       //shipping re-calculation
-      let totalWeightorignal = 0;
+      let shippingfeeorignal = 0;
       for (let i = 0; i < originalOrder.products.length; i++) {
-        let productFromDb = await Product.findById(
-          originalOrder.products[i].product
-        )
-          .select("weight")
-          .exec();
-        totalWeightorignal =
-          totalWeightorignal +
-          productFromDb.weight * originalOrder.products[i].count;
-      }
-
-      let shippingfeeorignal = 0; //here shipping charge fetch line removed, as using above "shippings"
-      for (let i = 0; i < shippings.length; i++) {
-        if (
-          totalWeightorignal <= shippings[i].weightend &&
-          totalWeightorignal >= shippings[i].weightstart
-        ) {
-          shippingfeeorignal = shippings[i].charges;
+        const product = originalOrder.products[i].product;
+        if (product.disprice === 0) {
+          shippingfeeorignal +=
+            product.shippingcharges * originalOrder.products[i].count;
+        } else {
+          shippingfeeorignal += product.shippingcharges;
         }
       }
       originalOrder.shippingfee = shippingfeeorignal;
@@ -1157,9 +1227,20 @@ exports.removeProductandMakeclone = async (req, res) => {
       }
 
       let discounted = "";
-      if (originalOrder.paymentIntent.dispercent) {
-        discounted =
-          (productsTotal * originalOrder.paymentIntent.dispercent) / 100;
+      if (originalOrder.paymentIntent.discountType) {
+        // in case of discount in persentage
+        if (originalOrder.paymentIntent.discountType === "Discount") {
+          discounted =
+            (productsTotal * originalOrder.paymentIntent.dispercent) / 100;
+        }
+        // in case of discount in cash
+        if (originalOrder.paymentIntent.discountType === "Cash") {
+          discounted = originalOrder.paymentIntent.dispercent;
+        }
+        // in case of discount in shipping fee
+        if (originalOrder.paymentIntent.discountType === "Shipping") {
+          discounted = originalOrder.shippingfee;
+        }
       }
 
       // Update amount and discount in originalOrder
@@ -1441,6 +1522,75 @@ exports.deleteEntry = async (req, res) => {
   }
 };
 
+exports.deleteOrder = async (req, res) => {
+  const { id } = req.body;
+
+  try {
+    // Find and delete the order by its ID
+    const deletedOrder = await Order.findByIdAndDelete(id);
+
+    // If the order was not found, return an error message
+    if (!deletedOrder) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    // Respond with success if the order was deleted
+    res.json({ success: true, message: "Order deleted successfully" });
+  } catch (err) {
+    // Handle errors (e.g., invalid ID format or database errors)
+    res
+      .status(400)
+      .json({ success: false, message: "Failed to delete the order" });
+  }
+};
+
+exports.sendInvoiceToEmail = async (req, res) => {
+  const { id } = req.body;
+
+  try {
+    // Fetch the order from the database using the id
+    const order = await Order.findById(id);
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Generate the PDF
+    const pdfPath = await generateInvoicePDF(order);
+
+    // Email content
+    const mailOptions = {
+      from: "Your App <ishtiaqahmad427427@gmail.com>",
+      to: order.email,
+      subject: `Order Invoice "ID: ${order.OrderId}"`,
+      html: orderReceipttemplate(order),
+      attachments: [
+        {
+          filename: `Order Invoice "ID:${order.OrderId}".pdf`,
+          path: pdfPath,
+          contentType: "application/pdf",
+        },
+      ],
+    };
+
+    // Send email using Mailjet
+    await transporter.sendMail(mailOptions);
+
+    // Send success response
+    res
+      .status(200)
+      .json({ message: "Invoice email sent successfully with PDF" });
+
+    // Clean up the PDF file after sending the email
+    fs.unlinkSync(pdfPath);
+  } catch (error) {
+    console.error("Error sending Invoice Email:", error);
+    res.status(500).json({ error: "Failed to send Invoice email" });
+  }
+};
+
 exports.flashData = async (req, res) => {
   try {
     const products = await Product.find({ onSale: "Yes" })
@@ -1559,5 +1709,105 @@ exports.salesData = async (req, res) => {
     res.status(200).json({ totalIncom, yearIncom, monthIncom, dailyIncom });
   } catch (error) {
     res.status(400).json({ error });
+  }
+};
+
+exports.addAdminReview = async (req, res) => {
+  const { productId, posterName, postedDate, star, comment, images } =
+    req.body.data;
+
+  try {
+    const user = await User.findOne({ email: req.user.email }).exec();
+
+    const product = await Product.findById(productId).exec();
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    // console.log(product);
+
+    const newReview = new Review({
+      star,
+      comment,
+      postedBy: user._id,
+      posterName,
+      product: productId,
+      postedOn: new Date(postedDate),
+      images,
+    });
+
+    await newReview.save();
+    res.json(newReview);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.getAdminReview = async (req, res) => {
+  const productId = req.body.query;
+  // console.log(productId);
+
+  try {
+    // Check if productId is provided
+    if (productId) {
+      // Find the user by their email
+      const user = await User.findOne({ email: req.user.email }).exec();
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Find reviews for the product posted by this user and populate the product details (title and first image)
+      const reviews = await Review.find({
+        product: productId, // Match the product
+        postedBy: user._id, // Match the user who posted the review
+      })
+        .populate({
+          path: "product", // Populate the product field
+          select: "title images", // Select only title and images from the product schema
+          transform: (doc) => ({
+            title: doc.title,
+            image: doc.images && doc.images.length > 0 ? doc.images[0] : null, // Return only the first image
+          }),
+        })
+        .sort({ postedOn: -1 }) // Sort reviews by postedOn field in descending order (newest first)
+        .exec();
+
+      // Return the sorted and populated reviews
+      return res.json(reviews);
+    } else {
+      // If productId is not provided
+      return res.status(400).json({ message: "Product ID is required" });
+    }
+  } catch (err) {
+    // Handle any errors that occur
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.deleteAdminReview = async (req, res) => {
+  const { reviewId } = req.body; // Extract reviewId from the request body
+
+  try {
+    // Check if reviewId is provided
+    if (!reviewId) {
+      return res.status(400).json({ message: "Review ID is required" });
+    }
+
+    // Find and delete the review by its ID
+    const deletedReview = await Review.findByIdAndDelete(reviewId);
+
+    // If no review was found with the given ID
+    if (!deletedReview) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    // Successfully deleted the review
+    return res.json({ message: "Review deleted successfully" });
+  } catch (err) {
+    // Handle any errors that occur during deletion
+    console.error(err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 };

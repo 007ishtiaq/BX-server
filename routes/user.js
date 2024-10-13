@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 // middlewares
-const { authCheck, adminCheck } = require("../middlewares/auth");
+const { authCheck, adminCheck, expiryCheck } = require("../middlewares/auth");
 // controllers
 const {
   userCart,
@@ -21,7 +21,8 @@ const {
   returnedorders,
   order,
   addToWishlist,
-  wishlist,
+  wishlistFull,
+  wishlistByPage,
   removeFromWishlist,
   createCashOrder,
   createOrder,
@@ -32,81 +33,80 @@ const {
   createReturn,
   handlenewsletterSubscribe,
   handlechecknewsSubs,
-  saveUserForm,
 } = require("../controllers/user");
 
-router.post("/user/cart", authCheck, userCart); // save cart
-router.get("/user/cart", authCheck, getUserCart); // get cart
-router.delete("/user/cart", authCheck, emptyCart); // empty cart
-router.post("/user/address", authCheck, saveAddress);
-router.get("/user/address", authCheck, getAddress);
-router.post("/user/form", saveUserForm);
+router.post("/user/cart", expiryCheck, authCheck, userCart); // save cart
+router.get("/user/cart", expiryCheck, authCheck, getUserCart); // get cart
+router.delete("/user/cart", expiryCheck, authCheck, emptyCart); // empty cart
+router.post("/user/address", expiryCheck, authCheck, saveAddress);
+router.get("/user/address", expiryCheck, authCheck, getAddress);
 
 //user profile
-router.post("/user/profile", authCheck, saveProfile);
-router.get("/user/profile", authCheck, getProfile);
+router.post("/user/profile", expiryCheck, authCheck, saveProfile);
+router.get("/user/profile", expiryCheck, authCheck, getProfile);
 
 //user order handling
-router.post("/user/order", authCheck, createOrder); // BFT, Waller, easypesa
-router.post("/user/cash-order", authCheck, createCashOrder); // cod
-router.post("/user/orders", authCheck, orders);
-router.post("/user/cancelledorders", authCheck, cancelledorders);
-router.post("/user/returnedorders", authCheck, returnedorders);
-router.get("/order/:id", authCheck, order);
+router.post("/user/order", expiryCheck, authCheck, createOrder); // BFT, Waller, easypesa
+router.post("/user/cash-order", expiryCheck, authCheck, createCashOrder); // cod
+router.post("/user/orders", expiryCheck, authCheck, orders);
+router.post("/user/cancelledorders", expiryCheck, authCheck, cancelledorders);
+router.post("/user/returnedorders", expiryCheck, authCheck, returnedorders);
+router.get("/order/:id", expiryCheck, authCheck, order);
 
 // coupon
 router.post(
   "/user/cart/couponValidate",
-
+  expiryCheck,
   authCheck,
   couponValidation
 );
-router.post("/user/cart/coupon", authCheck, applyCouponToUserCart);
+router.post("/user/cart/coupon", expiryCheck, authCheck, applyCouponToUserCart);
 router.post(
   "/user/cart/removecoupon",
-
+  expiryCheck,
   authCheck,
   removeCouponFromUserCart
 );
 
 // shipping
-router.post("/shipping", authCheck, adminCheck, shippingcreate);
-router.get("/shippings", shippinglist);
+router.post("/shipping", expiryCheck, authCheck, adminCheck, shippingcreate);
+router.get("/shippings", expiryCheck, shippinglist);
 router.delete(
   "/shipping/:shippingId",
-
+  expiryCheck,
   authCheck,
   adminCheck,
   shippingremove
 );
 
 // wishlist
-router.post("/user/wishlist", authCheck, addToWishlist);
-router.get("/user/wishlist", authCheck, wishlist);
+router.post("/user/wishlist", expiryCheck, authCheck, addToWishlist);
+router.get("/getwishlist", expiryCheck, authCheck, wishlistFull);
+router.post("/getwishlistbypage", expiryCheck, authCheck, wishlistByPage);
 router.put(
   "/user/wishlist/:productId",
-
+  expiryCheck,
   authCheck,
   removeFromWishlist
 );
 
 //Product cancellation & Return
-router.post("/user/product/cancel", authCheck, createCancellation);
-router.post("/user/product/return", authCheck, createReturn);
+router.post("/user/product/cancel", expiryCheck, authCheck, createCancellation);
+router.post("/user/product/return", expiryCheck, authCheck, createReturn);
 
 // wishlist
 router.post(
   "/user/newsletterSubscribe",
-
+  expiryCheck,
   authCheck,
   handlenewsletterSubscribe
 );
-router.get("/checknewsSubs", authCheck, handlechecknewsSubs);
-// router.get("/user/wishlist",   authCheck, wishlist);
+router.get("/checknewsSubs", expiryCheck, authCheck, handlechecknewsSubs);
+// router.get("/user/wishlist", expiryCheck, authCheck, wishlist);
 
-// router.get("/user",   (req, res) => {
+// router.get("/user", expiryCheck, (req, res) => {
 //   res.json({
-//     data: "hey you hit user API endpoint",
+//     data: "hey you hit user API endpoint", expiryCheck,
 //   });
 // });
 

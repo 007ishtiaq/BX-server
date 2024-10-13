@@ -28,6 +28,12 @@ const productSchema = new mongoose.Schema(
       maxlength: 2000,
       text: true,
     },
+    desattributes: [
+      {
+        type: Map, // Using Map to store dynamic key-value pairs
+        of: String, // Values will be of type String
+      },
+    ],
     price: {
       type: Number,
       required: true,
@@ -35,6 +41,11 @@ const productSchema = new mongoose.Schema(
       maxlength: 32,
     },
     disprice: {
+      type: Number,
+      trim: true,
+      maxlength: 32,
+    },
+    shippingcharges: {
       type: Number,
       trim: true,
       maxlength: 32,
@@ -68,10 +79,6 @@ const productSchema = new mongoose.Schema(
     },
     images: {
       type: Array,
-    },
-    shipping: {
-      type: String,
-      enum: ["Yes", "No"],
     },
     color: {
       type: String,

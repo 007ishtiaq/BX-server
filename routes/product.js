@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 
 // middlewares
-const { authCheck, adminCheck } = require("../middlewares/auth");
+const { authCheck, adminCheck, expiryCheck } = require("../middlewares/auth");
 
 // controller
 const {
   create,
   listAll,
+  listByPage,
   remove,
   read,
   readAdmin,
@@ -19,53 +20,46 @@ const {
   checkFlash,
   flashreset,
   productsCount,
-  productStar,
-  ratedProducts,
   listSimilar,
-  listRelated,
   searchFilters,
   highestprice,
 } = require("../controllers/product");
 
 // routes
-router.post("/product", authCheck, adminCheck, create);
-router.get("/products/total", productsCount);
+router.post("/product", expiryCheck, authCheck, adminCheck, create);
+router.get("/products/total", expiryCheck, productsCount);
 
-router.get("/products/:count", listAll); // products/100
-router.delete("/product/:slug", authCheck, adminCheck, remove);
+router.get("/productsByCount/:count", expiryCheck, listAll);
+router.post("/productsByPage", expiryCheck, listByPage);
+
+router.delete("/product/:slug", expiryCheck, authCheck, adminCheck, remove);
 router.post(
   "/productAdmin/:slug",
-
+  expiryCheck,
   authCheck,
   adminCheck,
   readAdmin
 );
-router.get("/product/:slug", read);
-router.put("/product/:slug", authCheck, adminCheck, update);
+router.get("/product/:slug", expiryCheck, read);
+router.put("/product/:slug", expiryCheck, authCheck, adminCheck, update);
 
 // list products based on bestselling
-// router.post("/products",   list);
-
-// list reviews based on createdOn date
-router.post("/reviews", reviewslist);
+// router.post("/products", expiryCheck, list);
 
 //Flashsale
-// router.post("/products/flash",   flashlist);
-router.post("/products/currentflash", flashcurrent);
-router.post("/product/checkflash/:slug", checkFlash);
-// router.post("/product/flashreset",   flashreset);
+// router.post("/products/flash", expiryCheck, flashlist);
+router.post("/products/currentflash", expiryCheck, flashcurrent);
+router.post("/product/checkflash/:slug", expiryCheck, checkFlash);
+// router.post("/product/flashreset", expiryCheck, flashreset);
 
-// rating
-router.put("/product/review/:productId", authCheck, productStar);
-router.get("/ratedAll", authCheck, ratedProducts);
 // Similar
-router.get("/product/Similar/:slug", listSimilar);
+router.get("/product/Similar/:slug", expiryCheck, listSimilar);
 // related
-// router.get("/product/related/:productId",   listRelated);
+// router.get("/product/related/:productId", expiryCheck, listRelated);
 // search
-router.post("/search/filters", searchFilters);
+router.post("/search/filters", expiryCheck, searchFilters);
 // Highest Price for price filter
-router.get("/search/highestprice", highestprice);
+router.get("/search/highestprice", expiryCheck, highestprice);
 
 //Product review jumia
 // router.post("/rateproduct/:id", authCheck, RatingProduct);

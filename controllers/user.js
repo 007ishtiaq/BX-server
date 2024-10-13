@@ -8,10 +8,8 @@ const Shipping = require("../models/shipping");
 const EmailOptIn = require("../models/optinEmail");
 const Productcancel = require("../models/productcancel");
 const Productreturn = require("../models/productreturn");
-const { mailgun, orderReceipttemplate } = require("../middlewares/utils");
 const Ledger = require("../models/ledger");
 const moment = require("moment");
-const ApplyForm = require("../models/applyform");
 
 const {
   Types: { ObjectId },
@@ -45,44 +43,35 @@ exports.userCart = async (req, res) => {
     let productFromDb = await Product.findById(cart[i]._id)
       .select("price disprice")
       .exec();
-    object.price = productFromDb.disprice
-      ? productFromDb.disprice
-      : productFromDb.price;
+    object.price =
+      productFromDb.disprice !== null
+        ? productFromDb.disprice
+        : productFromDb.price;
 
     products.push(object);
   }
-
-  // console.log('products', products)
 
   let cartTotal = 0;
   for (let i = 0; i < products.length; i++) {
     cartTotal = cartTotal + products[i].price * products[i].count;
   }
-
   // console.log("cartTotal", cartTotal);
 
-  let totalWeight = 0;
-  for (let i = 0; i < products.length; i++) {
-    let productFromDb = await Product.findById(products[i].product)
-      .select("weight")
-      .exec();
-    totalWeight = totalWeight + productFromDb.weight * products[i].count;
-  }
-  // console.log("productFromDb in backend", totalWeight);
-
+  //shipping fee (total of all shippings in products)
   let shippingfee = 0;
 
-  let shippings = await Shipping.find({}).exec();
+  for (let i = 0; i < products.length; i++) {
+    let productFromDb = await Product.findById(products[i].product)
+      .select("shippingcharges")
+      .exec();
 
-  for (let i = 0; i < shippings.length; i++) {
-    if (
-      totalWeight <= shippings[i].weightend &&
-      totalWeight >= shippings[i].weightstart
-    ) {
-      shippingfee = shippings[i].charges;
+    if (products[i].price === 0) {
+      // For products with price 0, multiply shipping charges by count
+      shippingfee += productFromDb.shippingcharges * products[i].count;
+    } else {
+      shippingfee += productFromDb.shippingcharges;
     }
   }
-  // console.log("shippingfee in backend", shippingfee);
 
   let newCart = await new Cart({
     products,
@@ -158,36 +147,6 @@ exports.saveAddress = async (req, res) => {
   ).exec();
 
   res.json({ ok: true });
-};
-exports.saveUserForm = async (req, res) => {
-  console.log(req.body.values);
-
-  try {
-    const newApplyForm = new ApplyForm({
-      Name: req.body.values.Name,
-      PhoneNum: req.body.values.PhoneNum,
-      Email: req.body.values.Email,
-      Gender: req.body.values.Gender,
-      Address: req.body.values.Address,
-      Qualification: req.body.values.Qualification,
-      Institution: req.body.values.Institution,
-      PassingYear: req.body.values.PassingYear,
-      CountryInterestedIn: req.body.values.CountryInterestedIn,
-      ApplyingForVisaType: req.body.values.ApplyingForVisaType,
-      EnglishLanguageTest: req.body.values.EnglishLanguageTest,
-      TestName: req.body.values.TestName,
-      TestMarks: req.body.values.TestMarks,
-      EstimatedBudget: req.body.values.EstimatedBudget,
-      AnyQuery: req.body.values.AnyQuery,
-    });
-
-    await newApplyForm.save();
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(400).send("Form Submission failed");
-  }
 };
 
 exports.getAddress = async (req, res) => {
@@ -267,15 +226,22 @@ exports.couponValidation = async (req, res) => {
 
   // taking user cart total to check min value of card
   const user = await User.findOne({ email: req.user.email }).exec();
-  let { cartTotal } = await Cart.findOne({
+  let { cartTotal, products } = await Cart.findOne({
     orderdBy: user._id,
-  })
-    .populate("products.product", "_id title price")
-    .exec();
+  }).exec();
+
+  // console.log("cart in coupon validation", products);
+
+  const hasFreeItem = products.some((item) => item.price === 0);
+  if (hasFreeItem) {
+    return res.json({
+      err: `Coupon not applicable for free items.`,
+    });
+  }
 
   if (cartTotal < parseInt(couponDetails.condition)) {
     return res.json({
-      err: `Cart value should be more then Rs. "${couponDetails.condition}".`,
+      err: `Cart value should be more then "$ ${couponDetails.condition}".`,
     });
   }
 
@@ -318,14 +284,18 @@ exports.applyCouponToUserCart = async (req, res) => {
   // taking user cart total to check min value of card
   let { products, cartTotal, shippingfee } = await Cart.findOne({
     orderdBy: user._id,
-  })
-    .populate("products.product", "_id title price")
-    .exec();
-  // console.log("cartTotal", cartTotal, "discount%", validCoupon.discount);
+  }).exec();
+
+  const hasFreeItem = products.some((item) => item.price === 0);
+  if (hasFreeItem) {
+    return res.json({
+      err: `Coupon not applicable for free items.`,
+    });
+  }
 
   if (cartTotal < parseInt(validCoupon.condition)) {
     return res.json({
-      err: `Cart value should be more then Rs. "${validCoupon.condition}".`,
+      err: `Cart value should be more then "$ ${validCoupon.condition}".`,
     });
   }
 
@@ -402,7 +372,6 @@ exports.orders = async (req, res) => {
     let user = await User.findOne({ email: req.user.email }).exec();
 
     let userOrders = await Order.find({ orderdBy: user._id })
-      .populate("products.product")
       .sort([["createdAt", "desc"]])
       .exec();
 
@@ -436,7 +405,6 @@ exports.cancelledorders = async (req, res) => {
       orderdBy: user._id,
       orderStatus: "Cancelled",
     })
-      .populate("products.product")
       .sort([["createdAt", "desc"]])
       .exec();
 
@@ -469,7 +437,6 @@ exports.returnedorders = async (req, res) => {
       orderdBy: user._id,
       orderStatus: "Returned",
     })
-      .populate("products.product")
       .sort([["createdAt", "desc"]])
       .exec();
 
@@ -493,17 +460,7 @@ exports.returnedorders = async (req, res) => {
 
 exports.order = async (req, res) => {
   try {
-    const myOrder = await Order.findById(req.params.id)
-      .populate({
-        path: "products.product",
-        model: "Product",
-        populate: [
-          { path: "category", model: "Category", select: "name slug" },
-          { path: "subs", model: "Sub", select: "name slug" },
-          { path: "subs2", model: "Sub2", select: "name slug" },
-        ],
-      })
-      .exec();
+    const myOrder = await Order.findById(req.params.id).exec();
 
     res.json(myOrder);
   } catch (error) {
@@ -528,7 +485,7 @@ exports.addToWishlist = async (req, res) => {
   }
 };
 
-exports.wishlist = async (req, res) => {
+exports.wishlistFull = async (req, res) => {
   try {
     const list = await User.findOne({ email: req.user.email })
       .select("wishlist")
@@ -539,6 +496,49 @@ exports.wishlist = async (req, res) => {
       res.json(list);
     } else {
       res.json([]);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.wishlistByPage = async (req, res) => {
+  const { page = 1, perPage = 10 } = req.body;
+
+  try {
+    // Find the user's wishlist
+    const user = await User.findOne({ email: req.user.email })
+      .select("wishlist")
+      .populate({
+        path: "wishlist",
+        options: {
+          skip: (page - 1) * perPage, // Skip for pagination
+          limit: perPage, // Limit the number of results per page
+          sort: { _id: -1 }, // Sort by _id in descending order (newest items first)
+        },
+      })
+      .exec();
+
+    if (user && user.wishlist) {
+      // Get the total count of wishlist items
+      const wishlistCount = await User.findOne({ email: req.user.email })
+        .select("wishlist")
+        .exec();
+
+      const totalWishlistCount = wishlistCount.wishlist.length;
+
+      res.json({
+        wishlist: user.wishlist, // Paginated wishlist
+        wishlistCount: totalWishlistCount, // Total number of items in the wishlist
+        currentPage: page, // Current page
+      });
+    } else {
+      res.json({
+        wishlist: [],
+        wishlistCount: 0,
+        currentPage: page,
+      });
     }
   } catch (error) {
     console.error(error);
@@ -596,37 +596,23 @@ exports.createCashOrder = async (req, res) => {
 
   const user = await User.findOne({ email: req.user.email }).exec();
 
-  let userCart = await Cart.findOne({ orderdBy: user._id }).exec();
+  const userCart = await Cart.findOne({ orderdBy: user._id })
+    .populate({
+      path: "products.product",
+      model: "Product",
+      populate: [{ path: "category", model: "Category", select: "name slug" }],
+    })
+    .exec();
 
   // User Cart checking
   if (!userCart) return res.json({ error: "Cart is Empty" });
-
-  // shipping fee calculation
-  let totalWeight = 0;
-  for (let i = 0; i < userCart.products.length; i++) {
-    let productFromDb = await Product.findById(userCart.products[i].product)
-      .select("weight")
-      .exec();
-    totalWeight =
-      totalWeight + productFromDb.weight * userCart.products[i].count;
-  }
-  let shippingfee = 0;
-  let shippings = await Shipping.find({}).exec();
-  for (let i = 0; i < shippings.length; i++) {
-    if (
-      totalWeight <= shippings[i].weightend &&
-      totalWeight >= shippings[i].weightstart
-    ) {
-      shippingfee = shippings[i].charges;
-    }
-  }
 
   let finalAmount = 0;
 
   if (couponApplied.applied && userCart.totalAfterDiscount) {
     finalAmount = userCart.totalAfterDiscount;
   } else {
-    finalAmount = userCart.cartTotal + shippingfee;
+    finalAmount = userCart.cartTotal + userCart.shippingfee;
   }
 
   let newOrder = await new Order({
@@ -636,7 +622,7 @@ exports.createCashOrder = async (req, res) => {
       discounted: userCart.discounted,
       dispercent: userCart.dispercent,
       discountType: userCart.discountType,
-      currency: "PKR",
+      currency: "$",
       created: Date.now(),
     },
     OrderId: generateNumericID(),
@@ -659,22 +645,7 @@ exports.createCashOrder = async (req, res) => {
 
   let updated = await Product.bulkWrite(bulkOption, {});
 
-  // email sending using mailgun
-  mailgun.messages().send(
-    {
-      from: "ApplianceBazar <appliancebazar@mg.mydomain.com>",
-      to: `${user.name} <${req.user.email}>`,
-      subject: `New Order ${newOrder.OrderId}`,
-      html: orderReceipttemplate(newOrder, user),
-    },
-    (error, body) => {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(body);
-      }
-    }
-  );
+  // email sending using mailjet
 
   res.json({ orderId: newOrder.OrderId });
 };
@@ -690,7 +661,13 @@ exports.createOrder = async (req, res) => {
 
   const user = await User.findOne({ email: req.user.email }).exec();
 
-  let userCart = await Cart.findOne({ orderdBy: user._id }).exec();
+  const userCart = await Cart.findOne({ orderdBy: user._id })
+    .populate({
+      path: "products.product",
+      model: "Product",
+      populate: [{ path: "category", model: "Category", select: "name slug" }],
+    })
+    .exec();
 
   // User Cart checking
   if (!userCart) return res.json({ error: "Cart is Empty" });
@@ -700,30 +677,8 @@ exports.createOrder = async (req, res) => {
   if (couponApplied.applied && userCart.totalAfterDiscount) {
     finalAmount = userCart.totalAfterDiscount;
   } else {
-    finalAmount = userCart.cartTotal;
+    finalAmount = userCart.cartTotal + userCart.shippingfee;
   }
-
-  // shipping fee calculation
-  let totalWeight = 0;
-  for (let i = 0; i < userCart.products.length; i++) {
-    let productFromDb = await Product.findById(userCart.products[i].product)
-      .select("weight")
-      .exec();
-    totalWeight =
-      totalWeight + productFromDb.weight * userCart.products[i].count;
-  }
-  let shippingfee = 0;
-  let shippings = await Shipping.find({}).exec();
-  for (let i = 0; i < shippings.length; i++) {
-    if (
-      totalWeight <= shippings[i].weightend &&
-      totalWeight >= shippings[i].weightstart
-    ) {
-      shippingfee = shippings[i].charges;
-    }
-  }
-
-  finalAmount = finalAmount + shippingfee;
 
   let newOrder = "";
 
@@ -735,7 +690,7 @@ exports.createOrder = async (req, res) => {
         discounted: userCart.discounted,
         dispercent: userCart.dispercent,
         discountType: userCart.discountType,
-        currency: "PKR",
+        currency: "$",
         created: Date.now(),
       },
       OrderId: generateNumericID(),
@@ -755,7 +710,7 @@ exports.createOrder = async (req, res) => {
         discounted: userCart.discounted,
         dispercent: userCart.dispercent,
         discountType: userCart.discountType,
-        currency: "PKR",
+        currency: "$",
         created: Date.now(),
       },
       OrderId: generateNumericID(),
@@ -775,7 +730,7 @@ exports.createOrder = async (req, res) => {
         discounted: userCart.discounted,
         dispercent: userCart.dispercent,
         discountType: userCart.discountType,
-        currency: "PKR",
+        currency: "$",
         created: Date.now(),
       },
       OrderId: generateNumericID(),

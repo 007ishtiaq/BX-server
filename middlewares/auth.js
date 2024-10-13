@@ -1,6 +1,22 @@
 const admin = require("../firebase");
 const User = require("../models/user");
 
+// Example usage
+
+exports.expiryCheck = async (req, res, next) => {
+  const expiryTime = new Date(process.env.SERVER_EXPIRY).getTime(); // Example expiry time
+  const currentTime = new Date().getTime(); // Current time
+  const timeDifference = expiryTime - currentTime;
+
+  if (timeDifference > 0) {
+    next();
+  } else {
+    res.status(500).json({
+      error: "Server time-out, please contact administrator.",
+    });
+  }
+};
+
 exports.authCheck = async (req, res, next) => {
   try {
     const firebaseUser = await admin

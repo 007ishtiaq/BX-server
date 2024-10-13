@@ -3,11 +3,11 @@ const router = express.Router();
 
 const { createPaymentIntent } = require("../controllers/stripe");
 // middleware
-const { authCheck } = require("../middlewares/auth");
+const { authCheck, expiryCheck } = require("../middlewares/auth");
 
 router.post(
   "/create-payment-intent",
-
+  expiryCheck,
   authCheck,
   createPaymentIntent
 );

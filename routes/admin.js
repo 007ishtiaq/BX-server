@@ -4,7 +4,7 @@ const { auth } = require("../firebase");
 const router = express.Router();
 
 // middlewares
-const { authCheck, adminCheck } = require("../middlewares/auth");
+const { authCheck, adminCheck, expiryCheck } = require("../middlewares/auth");
 
 const {
   salesData,
@@ -25,43 +25,138 @@ const {
   makeEntry,
   deleteEntry,
   allratings,
+  deleteOrder,
+  sendInvoiceToEmail,
+  addAdminReview,
+  getAdminReview,
+  deleteAdminReview,
 } = require("../controllers/admin");
 
 // routes
-router.get("/admin/sales", authCheck, adminCheck, salesData);
-router.get("/admin/flash", authCheck, adminCheck, flashData);
-router.get("/admin/orders", authCheck, adminCheck, orders);
-router.get("/admin/rejected-orders", authCheck, adminCheck, rejectedOrders);
-router.get("/admin/completed-orders", authCheck, adminCheck, completedOrders);
-router.get("/admin/returned-orders", authCheck, adminCheck, returnedOrders);
-router.put("/admin/order-status", authCheck, adminCheck, orderStatus);
-router.put("/admin/order-accept", authCheck, adminCheck, orderAccept);
-router.put("/admin/order-edit", authCheck, adminCheck, orderUpdate);
+router.get("/admin/sales", expiryCheck, authCheck, adminCheck, salesData);
+router.get("/admin/flash", expiryCheck, authCheck, adminCheck, flashData);
+router.get("/admin/orders", expiryCheck, authCheck, adminCheck, orders);
+router.get(
+  "/admin/rejected-orders",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  rejectedOrders
+);
+router.get(
+  "/admin/completed-orders",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  completedOrders
+);
+router.get(
+  "/admin/returned-orders",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  returnedOrders
+);
+router.put(
+  "/admin/order-status",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  orderStatus
+);
+router.put(
+  "/admin/order-accept",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  orderAccept
+);
+router.put(
+  "/admin/order-edit",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  orderUpdate
+);
 router.put(
   "/admin/order/item-delete",
+  expiryCheck,
   authCheck,
   adminCheck,
   removeProductandMakeclone
 );
 
+router.put(
+  "/admin/order/delete",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  deleteOrder
+);
+
+router.put(
+  "/admin/sendInvoice",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  sendInvoiceToEmail
+);
+
 // Product Action Info cancel or return
-router.put("/order/action", authCheck, adminCheck, actionInfo);
+router.put("/order/action", expiryCheck, authCheck, adminCheck, actionInfo);
 
 // Admin Ledger routes
-router.get("/admin/ledger", authCheck, adminCheck, ledgerInfo);
+router.get("/admin/ledger", expiryCheck, authCheck, adminCheck, ledgerInfo);
 
 // Admin Order Cashbacked
-router.put("/order/cashback", authCheck, adminCheck, setcashback);
+router.put("/order/cashback", expiryCheck, authCheck, adminCheck, setcashback);
 
 // Admin Order All payments Paid
-router.put("/order/paid", authCheck, adminCheck, setPaid);
+router.put("/order/paid", expiryCheck, authCheck, adminCheck, setPaid);
 
 // Admin Order Items back delivered
-router.put("/order/delivery", authCheck, adminCheck, setbackDeliver);
+router.put(
+  "/order/delivery",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  setbackDeliver
+);
 
 // Admin Ledger new entry
-router.put("/ledger/entry", authCheck, adminCheck, makeEntry);
+router.put("/ledger/entry", expiryCheck, authCheck, adminCheck, makeEntry);
 // Admin Ledger remove
-router.delete("/ledger/entry/:id", authCheck, adminCheck, deleteEntry);
+router.delete(
+  "/ledger/entry/:id",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  deleteEntry
+);
+
+// Admin Add a new product review
+router.post(
+  "/admin/add-review",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  addAdminReview
+);
+// get Admin's product reviews array
+router.post(
+  "/admin/product-reviews",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  getAdminReview
+);
+// delete Admin's 1 product review
+router.put(
+  "/admin/delete-review",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  deleteAdminReview
+);
 
 module.exports = router;
