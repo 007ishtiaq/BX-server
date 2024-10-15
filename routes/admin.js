@@ -26,10 +26,14 @@ const {
   deleteEntry,
   allratings,
   deleteOrder,
+  deleteRequest,
   sendInvoiceToEmail,
   addAdminReview,
   getAdminReview,
   deleteAdminReview,
+  listQuoteRequests,
+  readQuoteRequet,
+  setquoteRequestReplied,
 } = require("../controllers/admin");
 
 // routes
@@ -157,6 +161,23 @@ router.put(
   authCheck,
   adminCheck,
   deleteAdminReview
+);
+router.get("/Admin/quoteRequests", authCheck, adminCheck, listQuoteRequests);
+router.get("/Admin/quoteRequet/:id", authCheck, adminCheck, readQuoteRequet);
+router.put(
+  "/Admin/quoteRequest/replied",
+
+  authCheck,
+  adminCheck,
+  setquoteRequestReplied
+);
+
+router.put(
+  "/Admin/QuoteRequest/delete/",
+  expiryCheck,
+  authCheck,
+  adminCheck,
+  deleteRequest
 );
 
 module.exports = router;

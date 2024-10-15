@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const Product = require("../models/product");
+const QuoteRequest = require("../models/QuoteRequest");
 const Review = require("../models/review");
 const Order = require("../models/order");
 const Productcancel = require("../models/productcancel");
@@ -1809,5 +1810,67 @@ exports.deleteAdminReview = async (req, res) => {
     return res
       .status(500)
       .json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+exports.listQuoteRequests = async (req, res) =>
+  res.json(await QuoteRequest.find({}).sort({ createdAt: 1 }).exec());
+
+exports.readQuoteRequet = async (req, res) => {
+  try {
+    const QuoteRequet = await QuoteRequest.findById(req.params.id).exec();
+
+    if (!QuoteRequet) {
+      return res.status(404).json({ error: "Quote Requet not found" });
+    }
+
+    res.json(QuoteRequet);
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error contact forms" });
+  }
+};
+exports.setquoteRequestReplied = async (req, res) => {
+  try {
+    const quoteRequest = await QuoteRequest.findById(req.body.requestId).exec();
+
+    if (!quoteRequest) {
+      return res.status(404).json({ error: "Quote Requet not found" });
+    }
+
+    if (!quoteRequest.isReplied) {
+      quoteRequest.isReplied = true;
+    } else {
+      quoteRequest.isReplied = false;
+    }
+    // Save the updated form
+    await quoteRequest.save();
+    // Return the updated order to the frontend
+    res.json({ success: true, isReplied: quoteRequest.isReplied });
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error contact forms" });
+  }
+};
+
+exports.deleteRequest = async (req, res) => {
+  const { requestId } = req.body;
+
+  try {
+    // Find and delete the order by its ID
+    const deletedRequest = await QuoteRequest.findByIdAndDelete(requestId);
+
+    // If the order was not found, return an error message
+    if (!deletedRequest) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quote Request not found" });
+    }
+
+    // Respond with success if the order was deleted
+    res.json({ success: true, message: "Quote Request deleted successfully" });
+  } catch (err) {
+    // Handle errors (e.g., invalid ID format or database errors)
+    res
+      .status(400)
+      .json({ success: false, message: "Failed to delete the order" });
   }
 };

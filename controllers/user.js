@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const Product = require("../models/product");
+const QuoteRequest = require("../models/QuoteRequest");
 const Cart = require("../models/cart");
 const Coupon = require("../models/coupon");
 const Order = require("../models/order");
@@ -970,5 +971,33 @@ exports.handlechecknewsSubs = async (req, res) => {
     }
   } catch (error) {
     res.status(400).json({ error });
+  }
+};
+
+exports.saveQuoteRequest = async (req, res) => {
+  // console.log(req.body);
+
+  try {
+    const newQuoteRequest = new QuoteRequest({
+      ProductType: req.body.values.ProductType,
+      Quantity: req.body.values.Quantity,
+      Units: req.body.values.Units,
+      Height: req.body.values.Height,
+      Width: req.body.values.Width,
+      Depth: req.body.values.Depth,
+      Colors: req.body.values.Colors,
+      SheetType: req.body.values.SheetType,
+      Name: req.body.values.Name,
+      PhoneNum: req.body.values.PhoneNum,
+      Email: req.body.values.Email,
+      Details: req.body.values.Details,
+    });
+
+    await newQuoteRequest.save();
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(400).send("Form Submission failed");
   }
 };

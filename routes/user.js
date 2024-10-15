@@ -33,6 +33,7 @@ const {
   createReturn,
   handlenewsletterSubscribe,
   handlechecknewsSubs,
+  saveQuoteRequest,
 } = require("../controllers/user");
 
 router.post("/user/cart", expiryCheck, authCheck, userCart); // save cart
@@ -109,5 +110,7 @@ router.get("/checknewsSubs", expiryCheck, authCheck, handlechecknewsSubs);
 //     data: "hey you hit user API endpoint", expiryCheck,
 //   });
 // });
+
+router.post("/user/quoteRequest", saveQuoteRequest);
 
 module.exports = router;
