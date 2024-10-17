@@ -158,6 +158,37 @@ exports.listSimilar = async (req, res) => {
   }
 };
 
+exports.listRelated = async (req, res) => {
+  const { productId } = req.params; // Get the product ID from the request params
+
+  try {
+    // Find the product by ID
+    const product = await Product.findById(productId)
+      // .populate("category")
+      .select("category")
+      .exec();
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // Find related products in the same category, excluding the current product
+    const relatedProducts = await Product.find({
+      category: product.category, // Use categoryId directly
+      _id: { $ne: product._id }, // Exclude the current product
+    })
+      .populate("category")
+      .select("images title slug category") // Select only the specified fields
+      .exec();
+
+    console.log(relatedProducts);
+
+    res.status(200).json(relatedProducts);
+  } catch (error) {
+    res.status(400).send(error);
+  }
+};
+
 exports.update = async (req, res) => {
   try {
     // Find the product being updated

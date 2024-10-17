@@ -21,6 +21,7 @@ const {
   flashreset,
   productsCount,
   listSimilar,
+  listRelated,
   searchFilters,
   highestprice,
 } = require("../controllers/product");
@@ -55,7 +56,7 @@ router.post("/product/checkflash/:slug", expiryCheck, checkFlash);
 // Similar
 router.get("/product/Similar/:slug", expiryCheck, listSimilar);
 // related
-// router.get("/product/related/:productId", expiryCheck, listRelated);
+router.get("/product/related/:productId", expiryCheck, listRelated);
 // search
 router.post("/search/filters", expiryCheck, searchFilters);
 // Highest Price for price filter
