@@ -17,72 +17,7 @@ const {
 } = require("mongoose");
 
 exports.userCart = async (req, res) => {
-  // console.log(req.body); // {cart: []}
-  const { cart } = req.body;
-
-  let products = [];
-
-  const user = await User.findOne({ email: req.user.email }).exec();
-
-  // check if cart with logged in user id already exist
-  let cartExistByThisUser = await Cart.findOne({ orderdBy: user._id }).exec();
-
-  if (cartExistByThisUser) {
-    await Cart.findOneAndRemove({
-      orderdBy: user._id,
-    }).exec();
-    // console.log("removed old cart", cartremove);
-  }
-
-  for (let i = 0; i < cart.length; i++) {
-    let object = {};
-
-    object.product = cart[i]._id;
-    object.count = cart[i].count;
-    object.color = cart[i].color;
-    // get price for creating total
-    let productFromDb = await Product.findById(cart[i]._id)
-      .select("price disprice")
-      .exec();
-    object.price =
-      productFromDb.disprice !== null
-        ? productFromDb.disprice
-        : productFromDb.price;
-
-    products.push(object);
-  }
-
-  let cartTotal = 0;
-  for (let i = 0; i < products.length; i++) {
-    cartTotal = cartTotal + products[i].price * products[i].count;
-  }
-  // console.log("cartTotal", cartTotal);
-
-  //shipping fee (total of all shippings in products)
-  let shippingfee = 0;
-
-  for (let i = 0; i < products.length; i++) {
-    let productFromDb = await Product.findById(products[i].product)
-      .select("shippingcharges")
-      .exec();
-
-    if (products[i].price === 0) {
-      // For products with price 0, multiply shipping charges by count
-      shippingfee += productFromDb.shippingcharges * products[i].count;
-    } else {
-      shippingfee += productFromDb.shippingcharges;
-    }
-  }
-
-  let newCart = await new Cart({
-    products,
-    cartTotal,
-    shippingfee,
-    orderdBy: user._id,
-  }).save();
-
-  // console.log("new cart ----> ", newCart);
-  res.json({ ok: true });
+  //
 };
 
 exports.getUserCart = async (req, res) => {
@@ -214,48 +149,7 @@ exports.getProfile = async (req, res) => {
 };
 
 exports.couponValidation = async (req, res) => {
-  const { coupon } = req.body;
-
-  const couponDetails = await Coupon.findOne({ name: coupon }).exec();
-  // console.log("couponDetails", couponDetails);
-
-  if (couponDetails === null) {
-    return res.json({
-      err: "Invalid coupon",
-    });
-  }
-
-  // taking user cart total to check min value of card
-  const user = await User.findOne({ email: req.user.email }).exec();
-  let { cartTotal, products } = await Cart.findOne({
-    orderdBy: user._id,
-  }).exec();
-
-  // console.log("cart in coupon validation", products);
-
-  const hasFreeItem = products.some((item) => item.price === 0);
-  if (hasFreeItem) {
-    return res.json({
-      err: `Coupon not applicable for free items.`,
-    });
-  }
-
-  if (cartTotal < parseInt(couponDetails.condition)) {
-    return res.json({
-      err: `Cart value should be more then "$ ${couponDetails.condition}".`,
-    });
-  }
-
-  const expiry = new Date(couponDetails.expiry).getTime();
-  const now = new Date().getTime();
-  const gap = expiry - now;
-
-  if (gap <= 0) {
-    return res.json({
-      err: "Coupon Expired",
-    });
-  }
-  res.json(couponDetails);
+  //
 };
 
 exports.applyCouponToUserCart = async (req, res) => {

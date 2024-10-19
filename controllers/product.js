@@ -14,23 +14,7 @@ exports.create = async (req, res) => {
     }
 
     // Generate slug based on title and color
-    req.body.slug = slugify(`${req.body.title} - ${req.body.color}`);
-
-    // Handle shipping charges
-    if (req.body.shippingcharges === "" || req.body.shippingcharges == null) {
-      // Calculate shipping charges if not provided or empty string
-      let shippingfee = 0;
-      let shippings = await Shipping.find({}).exec();
-      for (let i = 0; i < shippings.length; i++) {
-        if (
-          req.body.weight <= shippings[i].weightend &&
-          req.body.weight >= shippings[i].weightstart
-        ) {
-          shippingfee = shippings[i].charges;
-        }
-      }
-      req.body.shippingcharges = shippingfee;
-    }
+    req.body.slug = slugify(`${req.body.title}`);
 
     // Create new product
     const newProduct = await Product.create(req.body);
@@ -294,146 +278,12 @@ exports.update = async (req, res) => {
 // };
 
 exports.flashcurrent = async (req, res) => {
-  try {
-    const now = new Date();
-    const products = await Product.find({ onSale: "Yes" })
-      .populate("category")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
-      .exec();
-
-    const uniqueTimes = Array.from(
-      new Set(products.map((product) => new Date(product.saleTime)))
-    );
-
-    const SaleTimeWhichpassed = uniqueTimes
-      .filter((time) => time <= now) // Filter out past sale times
-      .sort((a, b) => a - b)[0]; // Sort in ascending order // Get the first (nearest) sale time
-
-    // Reset sale time for products that have passed the nearest sale time
-    if (SaleTimeWhichpassed <= now) {
-      const bulkOption = products
-        .filter((product) => new Date(product.saleTime) <= now)
-        .map((product) => ({
-          updateOne: {
-            filter: { _id: product._id }, // Filter by product ID
-            update: { $set: { saleTime: "", onSale: "No", disprice: "" } },
-          },
-        }));
-      await Product.bulkWrite(bulkOption, {});
-    }
-
-    // Return products that are currently on sale
-    const updatedProducts = await Product.find({ onSale: "Yes" })
-      .populate("category")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
-      .exec();
-
-    const nearestSaleTime = uniqueTimes
-      .filter((time) => time >= now) // Filter out past sale times
-      .sort((a, b) => a - b)[0]; // Sort in ascending order // Get the first (nearest) sale time
-
-    const productsNearCurrentTime = updatedProducts.filter((product) => {
-      const productSaleTime = new Date(product.saleTime);
-      return +productSaleTime === +nearestSaleTime;
-    });
-
-    res.json(productsNearCurrentTime);
-  } catch (err) {
-    console.log(err);
-    res.status(400).send("Flash Products list failed");
-  }
+  //
 };
 
 exports.checkFlash = async (req, res) => {
-  try {
-    const slug = req.params.slug;
-    // Get the product from the Product collection based on the slug
-    const product = await Product.findOne({ slug }).exec();
-
-    if (!product) {
-      return res.status(404).send("Product not found");
-    }
-
-    // Store the product's saleTime in a variable
-    const productSaleTime = new Date(product.saleTime);
-
-    // Get all products that are currently on sale
-    const productsOnSale = await Product.find({ onSale: "Yes" }).exec();
-
-    const now = new Date();
-
-    // Calculate the nearest sale time among the products that are currently on sale
-    const uniqueTimes = Array.from(
-      new Set(productsOnSale.map((product) => new Date(product.saleTime)))
-    );
-
-    const SaleTimeWhichpassed = uniqueTimes
-      .filter((time) => time <= now) // Filter out past sale times
-      .sort((a, b) => a - b)[0]; // Sort in ascending order // Get the first (nearest) sale time
-
-    // Reset sale time for products that have passed the nearest sale time
-    if (SaleTimeWhichpassed <= now) {
-      const bulkOption = productsOnSale
-        .filter((product) => new Date(product.saleTime) <= now)
-        .map((product) => ({
-          updateOne: {
-            filter: { _id: product._id }, // Filter by product ID
-            update: { $set: { saleTime: "", onSale: "No", disprice: "" } },
-          },
-        }));
-      await Product.bulkWrite(bulkOption, {});
-    }
-
-    // Return products that are currently on sale
-    const updatedProducts = await Product.find({ onSale: "Yes" })
-      .populate("category")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
-      .exec();
-
-    // Calculate the nearest sale time among the products that are currently on sale
-    const uniqueSaleTimes = Array.from(
-      new Set(updatedProducts.map((product) => new Date(product.saleTime)))
-    );
-
-    const nearestSaleTime = uniqueSaleTimes
-      .filter((time) => time >= now) // Filter out past sale times
-      .sort((a, b) => a - b)[0]; // Get the first (nearest) sale time
-
-    // Check if the stored product's saleTime equals the nearestSaleTime
-    if (productSaleTime.getTime() === nearestSaleTime.getTime()) {
-      return res.send(nearestSaleTime.toISOString()); // Return nearestSaleTime if they match
-    } else {
-      return res.send("Not on Sale"); // Return nothing if the condition is not met
-    }
-  } catch (err) {
-    console.log(err);
-    res.status(400).send("Error checking flash");
-  }
+  //
 };
-
-// exports.flashreset = async (req, res) => {
-//   try {
-//     console.log("req.body of Flash reset", req.body.date);
-
-//     let products = await Product.find({ onSale: "Yes" }).exec();
-
-//     let bulkOption = products.map((item) => {
-//       return {
-//         updateOne: {
-//           filter: { saleTime: req.body.date }, // IMPORTANT item.product
-//           update: { $set: { saleTime: "", onSale: "No" } },
-//         },
-//       };
-//     });
-//     const updated = await Product.bulkWrite(bulkOption, {});
-//     console.log("flash reset success", updated);
-//   } catch (err) {
-//     console.log("Flash UPDATE ERROR ----> ", err);
-//   }
-// };
 
 exports.productsCount = async (req, res) => {
   let total = await Product.find({}).estimatedDocumentCount().exec();

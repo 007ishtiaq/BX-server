@@ -34,17 +34,6 @@ const productSchema = new mongoose.Schema(
         of: String, // Values will be of type String
       },
     ],
-    price: {
-      type: Number,
-      required: true,
-      trim: true,
-      maxlength: 32,
-    },
-    disprice: {
-      type: Number,
-      trim: true,
-      maxlength: 32,
-    },
     shippingcharges: {
       type: Number,
       trim: true,
@@ -54,34 +43,8 @@ const productSchema = new mongoose.Schema(
       type: ObjectId,
       ref: "Category",
     },
-    attributes: [
-      {
-        subs: {
-          type: ObjectId,
-          ref: "Sub",
-        },
-        subs2: [
-          {
-            type: ObjectId,
-            ref: "Sub2",
-          },
-        ],
-      },
-    ],
-    weight: {
-      type: Number,
-      default: 0,
-    },
-    quantity: Number,
-    sold: {
-      type: Number,
-      default: 0,
-    },
     images: {
       type: Array,
-    },
-    color: {
-      type: String,
     },
     brand: {
       type: String,
@@ -98,13 +61,6 @@ const productSchema = new mongoose.Schema(
         },
       },
     ],
-    onSale: {
-      type: String,
-      enum: ["Yes", "No"],
-    },
-    saleTime: {
-      type: String,
-    },
   },
   { timestamps: true }
 );

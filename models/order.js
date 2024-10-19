@@ -12,8 +12,6 @@ const orderSchema = new mongoose.Schema(
           title: String,
           slug: String,
           description: String,
-          price: Number,
-          disprice: Number,
           shippingcharges: Number,
           // category: {
           //   name: String,
