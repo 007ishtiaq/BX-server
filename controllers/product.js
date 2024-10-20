@@ -160,8 +160,6 @@ exports.listRelated = async (req, res) => {
       .select("images title slug category") // Select only the specified fields
       .exec();
 
-    console.log(relatedProducts);
-
     res.status(200).json(relatedProducts);
   } catch (error) {
     res.status(400).send(error);
@@ -217,61 +215,6 @@ exports.update = async (req, res) => {
   }
 };
 
-// WITHOUT PAGINATION
-// exports.list = async (req, res) => {
-//   try {
-//     // createdAt/updatedAt, desc/asc, 3
-//     const { sort, order, limit } = req.body;
-//     const products = await Product.find({})
-//       .populate("category")
-//       .populate("subs")
-//       .sort([[sort, order]])
-//       .limit(limit)
-//       .exec();
-
-//     res.json(products);
-//   } catch (err) {
-//     console.log(err);
-//   }
-// };
-
-// WITH PAGINATION
-// exports.list = async (req, res) => {
-//   try {
-//     const { sort, order, page } = req.body;
-//     const currentPage = page || 1;
-//     const perPage = 3; // 3
-
-//     const products = await Product.find({})
-//       .skip((currentPage - 1) * perPage)
-//       .populate("category")
-//       .populate("subs")
-//       .populate("subs2")
-//       .sort([[sort, order]])
-//       .limit(perPage)
-//       .exec();
-
-//     res.json(products);
-//   } catch (err) {
-//     console.log(err);
-//   }
-// };
-
-// exports.flashlist = async (req, res) => {
-//   try {
-//     const products = await Product.find({ onSale: "Yes" })
-//       .populate("category")
-//       .populate("subs")
-//       .populate("subs2")
-//       .exec();
-
-//     res.json(products);
-//   } catch (err) {
-//     console.log(err);
-//     res.status(400).send("Flash Products list failed");
-//   }
-// };
-
 exports.flashcurrent = async (req, res) => {
   //
 };
@@ -286,6 +229,62 @@ exports.productsCount = async (req, res) => {
 };
 
 // New system - with pagination
+const handleQuery = async (req, res, query, page, perPage) => {
+  try {
+    // Perform text search on title and description
+    const textSearchResults = await Product.find({ $text: { $search: query } })
+      .populate("category", "_id name")
+      .skip((page - 1) * perPage) // Skip products for pagination
+      .limit(perPage) // Limit the number of products returned
+      .exec();
+
+    const totalTextSearchResults = await Product.find({
+      $text: { $search: query },
+    }).countDocuments();
+
+    if (textSearchResults.length !== 0) {
+      return res.json({
+        products: textSearchResults,
+        totalProducts: totalTextSearchResults,
+      });
+    }
+
+    const allProducts = await Product.find({})
+      .populate("category", "_id name")
+      .exec();
+
+    const lowerCaseQuery = query.toLowerCase();
+
+    // Filter by title, description, etc. and paginate the results
+    const searchResults = allProducts.filter((product) => {
+      return (
+        product.title.toLowerCase().includes(lowerCaseQuery) ||
+        product.description.toLowerCase().includes(lowerCaseQuery) ||
+        product.category.name.toLowerCase().includes(lowerCaseQuery) ||
+        product.brand?.toLowerCase().includes(lowerCaseQuery) ||
+        product.art === parseInt(query)
+      );
+    });
+
+    // Paginate the filtered results
+    const paginatedResults = searchResults.slice(
+      (page - 1) * perPage,
+      page * perPage
+    );
+
+    if (paginatedResults.length !== 0) {
+      return res.json({
+        products: paginatedResults,
+        totalProducts: searchResults.length, // Total results count
+      });
+    }
+
+    res.status(404).json({ message: "No products found" });
+  } catch (err) {
+    console.error("Error handling query:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 const handleCategory = async (req, res, category) => {
   try {
@@ -318,9 +317,15 @@ const handleBrand = async (req, res, brand) => {
 };
 
 exports.searchFilters = async (req, res) => {
-  const { category, brand } = req.body.arg;
+  const { query, category, brand } = req.body.arg;
   const page = req.body.page;
   const perPage = req.body.perPage;
+
+  if (query) {
+    // console.log("query --->", query);
+    await handleQuery(req, res, query, page, perPage);
+  }
+
   if (category) {
     // console.log("category ---> ", category);
     await handleCategory(req, res, category);
