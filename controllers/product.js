@@ -73,10 +73,7 @@ exports.remove = async (req, res) => {
 exports.read = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug })
-      .select("-saleTime") // Exclude the saleTime field
       .populate("category")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
       .exec();
 
     if (!product) {
@@ -92,8 +89,6 @@ exports.readAdmin = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug })
       .populate("category")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
       .exec();
 
     if (!product) {
