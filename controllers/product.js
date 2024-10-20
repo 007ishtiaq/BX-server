@@ -105,8 +105,6 @@ exports.listSimilar = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug })
       .populate("category")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
       .exec();
 
     const patern = product.slug.substring(0, product.slug.lastIndexOf("-"));
@@ -290,8 +288,6 @@ const handleCategory = async (req, res, category) => {
   try {
     let products = await Product.find({ category })
       .populate("category", "_id name")
-      .populate("attributes.subs")
-      .populate("attributes.subs2")
       .exec();
 
     res.json({
@@ -305,10 +301,6 @@ const handleCategory = async (req, res, category) => {
 const handleBrand = async (req, res, brand) => {
   const products = await Product.find({ brand })
     .populate("category", "_id name")
-    .populate("attributes.subs")
-    .populate("attributes.subs2")
-    // .populate("subs2")
-    // .populate("postedBy", "_id name")
     .exec();
 
   res.json({
