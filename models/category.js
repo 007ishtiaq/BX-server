@@ -15,10 +15,6 @@ const categorySchema = new mongoose.Schema(
       lowercase: true,
       index: true,
     },
-    svg: {
-      type: String,
-      trim: true,
-    },
     image: {
       url: {
         type: String,
