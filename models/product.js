@@ -26,6 +26,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
       text: true,
+      trim: true,
     },
     desattributes: [
       {
